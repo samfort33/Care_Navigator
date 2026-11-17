@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       where: { email: normalizedEmail },
     });
 
-    if (!user || !user.passwordHash) {
+    if (!user || !user.passwordHash || user.isSeedFixture) {
       return NextResponse.json(
         { error: 'Invalid email address or password.' },
         { status: 401 }

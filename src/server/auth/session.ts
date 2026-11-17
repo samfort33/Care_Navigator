@@ -128,7 +128,7 @@ export async function getServerSession(options?: {
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
       const verified = await verifySessionToken(token);
-      if (verified) return verified;
+      if (verified && !verified.isSeedFixture) return verified;
     }
 
     const cookieHeader = getHeader('cookie');
@@ -137,7 +137,7 @@ export async function getServerSession(options?: {
       if (match && match[1]) {
         const verified = await verifySessionToken(decodeURIComponent(match[1]));
         // If an explicit token was sent, return the verification result (null if expired or invalid)
-        return verified;
+        return verified && !verified.isSeedFixture ? verified : null;
       }
     }
   }
@@ -149,7 +149,7 @@ export async function getServerSession(options?: {
     if (tokenCookie?.value) {
       const verified = await verifySessionToken(tokenCookie.value);
       // If an explicit session cookie was found, return the verification result (null if expired or invalid)
-      return verified;
+      return verified && !verified.isSeedFixture ? verified : null;
     }
   } catch {
     // cookies() called outside request context
