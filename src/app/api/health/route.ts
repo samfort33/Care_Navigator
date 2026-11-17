@@ -67,7 +67,7 @@ export async function GET() {
         ...(isLocalOllama ? { serviceReachable: ollamaReachable, modelAvailable: ollamaModelAvailable } : {}),
       },
       storageVault: {
-        mode: env.STORAGE_BUCKET_NAME ? 'S3_PRIVATE_BUCKET' : 'LOCAL_PRIVATE_VAULT',
+        mode: process.env.VERCEL === '1' ? 'UNAVAILABLE_PERSISTENT_STORAGE_NOT_CONFIGURED' : 'LOCAL_PRIVATE_VAULT',
       },
     });
   } catch {

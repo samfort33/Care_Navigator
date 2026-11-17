@@ -104,12 +104,14 @@ npm run build
 Vercel deployments use the PostgreSQL schema. Do not use the local SQLite file for production: serverless instances do not provide durable local file storage.
 
 1. Import `samfort33/Care_Navigator` into Vercel and keep the project root at `./`.
-2. Add a PostgreSQL integration from the Vercel Marketplace. Configure `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations.
+2. Add a PostgreSQL integration from the Vercel Marketplace. Prisma Postgres provides `DATABASE_URL` (direct, for migrations) and `DATABASE_URL_POOLED` (pooled, for application requests).
 3. Add a unique `AUTH_SECRET` with at least 32 characters. Set `NEXTAUTH_URL` to the deployed site URL.
 4. Keep these values in Vercel’s encrypted environment settings. Never commit them to GitHub or expose them with a `NEXT_PUBLIC_` prefix.
 5. Deploy the `main` branch. `vercel.json` runs `npm run vercel-build`, which applies PostgreSQL migrations on production deployments before building the Next.js app. Preview deployments build without applying production migrations.
 
 The local developer workflow remains SQLite-backed: `npm run dev` generates the local Prisma Client before starting Next.js. Production migrations live separately under `prisma/postgres/migrations`.
+
+Patient media and voice uploads are disabled on Vercel until a durable private object-storage adapter is configured. Vercel function filesystems are ephemeral; the app reports this state at `/api/health` instead of accepting files that could disappear after a request.
 
 > This deployment setup does not by itself establish HIPAA compliance or make the demo safe for real patient records. Review hosting agreements, privacy controls, access policies, and backups before storing any real health information.
 

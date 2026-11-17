@@ -8,6 +8,7 @@ import {
   validateFileBuffer,
   privateStorageVault,
   generateAuthorizedFileUrl,
+  isPrivateFileStorageAvailable,
 } from '@/server/storage';
 import { getMediaAnalysisProvider } from '@/server/media/analysis-adapter';
 import { checkRateLimit, createRateLimitResponse } from '@/server/security/rate-limiter';
@@ -15,6 +16,13 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isPrivateFileStorageAvailable()) {
+      return NextResponse.json(
+        { error: 'File uploads are unavailable until persistent private storage is configured.' },
+        { status: 503 }
+      );
+    }
+
     // 1. Rate Limiting: Max 25 uploads per 10 minutes per IP
     const rateLimit = checkRateLimit(request, {
       keyPrefix: 'media_upload',

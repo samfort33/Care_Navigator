@@ -273,6 +273,11 @@ export class PrivateStorageVault {
 
 export const privateStorageVault = new PrivateStorageVault();
 
+/** Vercel function filesystems are ephemeral, so patient file uploads stay disabled there. */
+export function isPrivateFileStorageAvailable(): boolean {
+  return process.env.VERCEL !== '1';
+}
+
 /**
  * Generates a short-lived HMAC signed URL for secure file access.
  * Validity defaults to 15 minutes (900 seconds).

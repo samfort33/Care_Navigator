@@ -4,13 +4,25 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/server/auth/session';
 import { requireAuthenticated, AuthError } from '@/server/auth/guards';
 import { recordAuditLog } from '@/server/audit/audit-logger';
-import { validateFileBuffer, privateStorageVault, generateAuthorizedFileUrl } from '@/server/storage';
+import {
+  validateFileBuffer,
+  privateStorageVault,
+  generateAuthorizedFileUrl,
+  isPrivateFileStorageAvailable,
+} from '@/server/storage';
 import { getSpeechToTextProvider } from '@/server/voice/provider-adapter';
 import { SilenceDetectedError, SpeechToTextError } from '@/server/voice/types';
 import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isPrivateFileStorageAvailable()) {
+      return NextResponse.json(
+        { error: 'Voice uploads are unavailable until persistent private storage is configured.' },
+        { status: 503 }
+      );
+    }
+
     const session = await getServerSession({ strictCookieOnly: true, req: request });
     const user = requireAuthenticated(session);
 

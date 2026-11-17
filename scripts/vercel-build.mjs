@@ -11,10 +11,10 @@ function run(command, args) {
 }
 
 if (isProduction) {
-  const databaseUrl = process.env.DATABASE_URL ?? '';
-  const directUrl = process.env.DIRECT_URL ?? '';
-  if (!/^postgres(?:ql)?:\/\//i.test(databaseUrl) || !/^postgres(?:ql)?:\/\//i.test(directUrl)) {
-    throw new Error('Production deployment requires PostgreSQL DATABASE_URL and DIRECT_URL values.');
+  const directUrl = process.env.DATABASE_URL ?? '';
+  const pooledUrl = process.env.DATABASE_URL_POOLED ?? '';
+  if (!/^postgres(?:ql)?:\/\//i.test(directUrl) || !/^postgres(?:ql)?:\/\//i.test(pooledUrl)) {
+    throw new Error('Production deployment requires direct DATABASE_URL and pooled DATABASE_URL_POOLED values.');
   }
   run(npx, ['prisma', 'migrate', 'deploy', '--schema=prisma/postgres/schema.prisma']);
 }
