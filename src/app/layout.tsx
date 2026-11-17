@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 };
 
 import { OfflineConnectivityDetector } from '@/components/ui/OfflineConnectivityDetector';
+import { MaterialSymbolsLoader } from '@/components/ui/MaterialSymbolsLoader';
 import { cookies } from 'next/headers';
 import { LanguageProvider, type AppLanguage } from '@/lib/language';
 
@@ -23,6 +24,7 @@ export default async function RootLayout({
     <html lang={initialLanguage}>
       <body className="min-h-screen bg-surface text-on-surface font-sans antialiased">
         <LanguageProvider initialLanguage={initialLanguage}>
+          <MaterialSymbolsLoader />
           <OfflineConnectivityDetector />
           {children}
         </LanguageProvider>
