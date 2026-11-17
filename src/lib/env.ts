@@ -10,7 +10,7 @@ import { z } from 'zod';
 const serverEnvSchema = z.object({
   DATABASE_URL: z
     .string()
-    .min(1, 'DATABASE_URL is required (e.g., "file:./dev.db" or PostgreSQL connection string)')
+    .min(1, 'DATABASE_URL is required (e.g., "file:./dev.db" or a PostgreSQL connection string)')
     .default('file:./dev.db'),
   AUTH_SECRET: z
     .string()
@@ -95,6 +95,15 @@ export function validateServerEnv(rawEnv: Record<string, string | undefined> = p
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
       .join('; ');
     throw new Error(`Invalid CareNavigator environment configuration: ${formattedErrors}`);
+  }
+
+  if (parsed.data.NODE_ENV === 'production') {
+    if (!rawEnv.AUTH_SECRET || rawEnv.AUTH_SECRET.length < 32 || rawEnv.AUTH_SECRET.startsWith('dev-only-')) {
+      throw new Error('Production requires a unique AUTH_SECRET of at least 32 characters.');
+    }
+    if (!/^postgres(?:ql)?:\/\//i.test(parsed.data.DATABASE_URL)) {
+      throw new Error('Production requires a persistent PostgreSQL DATABASE_URL.');
+    }
   }
 
   return parsed.data;

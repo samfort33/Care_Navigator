@@ -39,7 +39,7 @@
 | :--- | :--- | :--- |
 | **Application Framework** | `next@^15.1.7`, `react@^19.0.0`, `typescript@^5.7.3` | Full-stack App Router, Server Components, Route Handlers, strict type system |
 | **Styling & Design System** | `tailwindcss@^3.4.17`, `clsx`, `tailwind-merge` | Canonical CareNavigator M3 color tokens, semantic acuity tokens, responsive layouts |
-| **Database & Schema ORM** | `@prisma/client@^6.4.1`, `prisma@^6.4.1`, `tsx` | Relational persistence (`file:./dev.db` local SQLite out-of-the-box; PostgreSQL ready) |
+| **Database & Schema ORM** | `@prisma/client@^6.4.1`, `prisma@^6.4.1`, `tsx` | Local SQLite (`prisma/schema.prisma`) and a managed PostgreSQL deployment schema (`prisma/postgres/schema.prisma`) |
 | **Authentication & Security** | `jose@^6.0.8`, `zod@^3.24.2` | HMAC-SHA256 HTTP-only JWT session signing, server RBAC & ownership guards, env/input validation |
 | **AI & Multimodal SDK** | `@google/genai` | Google Gemini API integration for symptom intake, lab OCR, and voice transcription |
 | **Testing & Quality** | `vitest@^3.0.6`, `@testing-library/react`, `eslint` | Automated unit/integration testing, static analysis, and build checks |
@@ -57,6 +57,7 @@ cp .env.example .env
 
 All variables in [`.env.example`](./.env.example) are validated at server startup by [`src/lib/env.ts`](./src/lib/env.ts):
 - `DATABASE_URL`: Defaults to `"file:./dev.db"` for zero-config local relational persistence (can be pointed to PostgreSQL in production).
+- `DIRECT_URL`: Direct PostgreSQL connection used only for production Prisma migrations.
 - `AUTH_SECRET`: Secret key (`>=16` chars) used to sign HTTP-only session JWTs.
 - `AI_ASSESSMENT_PROVIDER`: Selects `gemini` or local `ollama` MedGemma. Without a configured provider, triage transparently uses deterministic clinical safety rules.
 - `GEMINI_API_KEY`: Required only when using Gemini. It can be left blank for local Ollama or deterministic fallback mode.
@@ -97,6 +98,20 @@ npm test
 # Build production application bundle
 npm run build
 ```
+
+### 4.4 Deploy to Vercel
+
+Vercel deployments use the PostgreSQL schema. Do not use the local SQLite file for production: serverless instances do not provide durable local file storage.
+
+1. Import `samfort33/Care_Navigator` into Vercel and keep the project root at `./`.
+2. Add a PostgreSQL integration from the Vercel Marketplace. Configure `DATABASE_URL` for application connections and `DIRECT_URL` for Prisma migrations.
+3. Add a unique `AUTH_SECRET` with at least 32 characters. Set `NEXTAUTH_URL` to the deployed site URL.
+4. Keep these values in Vercel’s encrypted environment settings. Never commit them to GitHub or expose them with a `NEXT_PUBLIC_` prefix.
+5. Deploy the `main` branch. `vercel.json` runs `npm run vercel-build`, which applies PostgreSQL migrations on production deployments before building the Next.js app. Preview deployments build without applying production migrations.
+
+The local developer workflow remains SQLite-backed: `npm run dev` generates the local Prisma Client before starting Next.js. Production migrations live separately under `prisma/postgres/migrations`.
+
+> This deployment setup does not by itself establish HIPAA compliance or make the demo safe for real patient records. Review hosting agreements, privacy controls, access policies, and backups before storing any real health information.
 
 ---
 
