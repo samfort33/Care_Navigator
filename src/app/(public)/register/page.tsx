@@ -86,6 +86,10 @@ export default function RegisterPage() {
           </Link>
         </div>
 
+        <p className="-mt-2 text-sm leading-6 text-on-surface-variant">
+          This form creates a patient account. Clinician accounts are provided by a healthcare organization after verification; patient registration does not grant clinical access.
+        </p>
+
         {/* Clinical Disclaimer */}
         <div className="p-4 rounded-xl bg-surface-container-low border-l-4 border-primary flex items-start gap-3">
           <MaterialIcon name="verified_user" className="text-primary text-[20px] shrink-0 mt-0.5" />
@@ -147,7 +151,7 @@ export default function RegisterPage() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Nusrat Jahan"
+                placeholder="Your full name"
                 className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40 text-on-surface font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest"
               />
             </div>

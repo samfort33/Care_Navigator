@@ -110,6 +110,11 @@ export async function getServerSession(options?: {
   strictCookieOnly?: boolean;
   req?: Request | { headers?: Headers | { get(name: string): string | null } };
 }): Promise<SessionUser | null> {
+  const allowLocalSeedSessions =
+    process.env.NODE_ENV !== 'production' && process.env.CARE_NAVIGATOR_ENABLE_TEST_ACCOUNTS === 'true';
+  const isRealAccount = (user: SessionUser | null) =>
+    user && (!user.isSeedFixture || allowLocalSeedSessions) ? user : null;
+
   // 1. If options?.req is provided, inspect Authorization header or Cookie header
   if (options?.req) {
     const getHeader = (name: string): string | null => {
@@ -128,7 +133,8 @@ export async function getServerSession(options?: {
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
       const verified = await verifySessionToken(token);
-      if (verified && !verified.isSeedFixture) return verified;
+      const account = isRealAccount(verified);
+      if (account) return account;
     }
 
     const cookieHeader = getHeader('cookie');
@@ -137,7 +143,7 @@ export async function getServerSession(options?: {
       if (match && match[1]) {
         const verified = await verifySessionToken(decodeURIComponent(match[1]));
         // If an explicit token was sent, return the verification result (null if expired or invalid)
-        return verified && !verified.isSeedFixture ? verified : null;
+        return isRealAccount(verified);
       }
     }
   }
@@ -149,7 +155,7 @@ export async function getServerSession(options?: {
     if (tokenCookie?.value) {
       const verified = await verifySessionToken(tokenCookie.value);
       // If an explicit session cookie was found, return the verification result (null if expired or invalid)
-      return verified && !verified.isSeedFixture ? verified : null;
+      return isRealAccount(verified);
     }
   } catch {
     // cookies() called outside request context

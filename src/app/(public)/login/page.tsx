@@ -88,6 +88,9 @@ export default function LoginPage() {
               New to CareNavigator?{' '}
               <Link href="/register" className="font-bold text-primary hover:underline">Create an account</Link>
             </p>
+            <p className="mt-4 text-center text-xs leading-5 text-on-surface-variant">
+              Clinician access is provisioned by your healthcare organization after verification. Sign in with your organization-issued account.
+            </p>
             <p className="mt-5 text-center text-xs text-on-surface-variant">
               <Link href="/about" className="hover:text-primary hover:underline">Learn how CareNavigator works</Link>
             </p>

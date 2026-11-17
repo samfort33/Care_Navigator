@@ -46,7 +46,9 @@ export async function POST(request: NextRequest) {
       where: { email: normalizedEmail },
     });
 
-    if (!user || !user.passwordHash || user.isSeedFixture) {
+    const allowLocalSeedLogin =
+      process.env.NODE_ENV !== 'production' && process.env.CARE_NAVIGATOR_ENABLE_TEST_ACCOUNTS === 'true';
+    if (!user || !user.passwordHash || (user.isSeedFixture && !allowLocalSeedLogin)) {
       return NextResponse.json(
         { error: 'Invalid email address or password.' },
         { status: 401 }

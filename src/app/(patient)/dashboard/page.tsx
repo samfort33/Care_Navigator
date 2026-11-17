@@ -1,12 +1,15 @@
 import React from 'react';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { getServerSession, DEMO_PERSONAS } from '@/server/auth/session';
+import { getServerSession } from '@/server/auth/session';
+import { redirect } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { SeedFixtureBadge } from '@/components/ui/SeedFixtureBadge';
 
 export default async function PatientDashboardPage() {
-  const session = (await getServerSession()) ?? DEMO_PERSONAS.PATIENT;
+  const session = await getServerSession({ strictCookieOnly: true });
+  if (!session) redirect('/login');
+  if (session.role !== 'PATIENT') redirect(session.role === 'ADMIN' ? '/admin/impact' : '/assessments/history');
 
   const profile = await prisma.patientProfile.findFirst({
     where: { userId: session.id },
@@ -40,8 +43,15 @@ export default async function PatientDashboardPage() {
     },
   });
 
-  const firstName = session.name.split(' ')[0] ?? 'Sarah';
-  const mrn = session.mrn ?? '#44092-B';
+  const firstName = session.name.split(' ')[0];
+  const mrn = session.mrn ?? 'Pending';
+  const today = new Intl.DateTimeFormat('en-BD', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Asia/Dhaka',
+  }).format(new Date());
 
   return (
     <div className="space-y-8">
@@ -50,8 +60,8 @@ export default async function PatientDashboardPage() {
         <div>
           <div className="flex items-center gap-2 text-primary font-label-md text-label-md mb-1 flex-wrap">
             <MaterialIcon name="calendar_today" className="text-[16px]" />
-            <span>Thursday, October 24, 2024 • MRN {mrn}</span>
-            <SeedFixtureBadge isSeedFixture={profile?.isSeedFixture ?? true} />
+            <span>{today} • MRN {mrn}</span>
+            {session.isSeedFixture && <SeedFixtureBadge isSeedFixture />}
           </div>
           <h1 className="font-headline-xl text-headline-xl-mobile lg:text-headline-xl text-on-surface tracking-tight">
             Good morning, {firstName}
@@ -78,90 +88,34 @@ export default async function PatientDashboardPage() {
         </div>
       </section>
 
-      {/* Contextual Telemetry & Reminders Strip */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Alert 1: Profile Incomplete */}
-        <div className="bg-surface-container-lowest p-4 rounded-xl flex items-start gap-3.5 shadow-xs border-l-4 border-error">
-          <div className="w-9 h-9 rounded-lg bg-error-container text-on-error-container flex items-center justify-center shrink-0 mt-0.5">
-            <MaterialIcon name="assignment_late" className="text-[20px]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-label-sm text-label-sm uppercase tracking-wider text-error">
-                Administrative Task
-              </span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                85% Complete
-              </span>
-            </div>
-            <p className="font-headline-sm text-headline-sm text-on-surface mt-0.5 truncate">
-              Insurance coverage verification pending
-            </p>
-            <Link
-              href="/settings/privacy"
-              className="inline-flex items-center gap-1 font-label-md text-label-md text-primary hover:underline mt-1.5"
-            >
-              <span>Complete Setup</span>
-              <MaterialIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-          </div>
-        </div>
+      <section aria-label="Your care overview" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <article className="rounded-xl border border-outline-variant/30 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Health profile</p>
+          <p className="mt-2 font-semibold text-on-surface">{profile ? 'Your profile is ready to update' : 'Profile details are not available'}</p>
+          <Link href="/records" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Review health records <MaterialIcon name="arrow_forward" className="text-sm" /></Link>
+        </article>
 
-        {/* Alert 2: Upcoming Appointment */}
-        <div className="bg-surface-container-lowest p-4 rounded-xl flex items-start gap-3.5 shadow-xs border-l-4 border-primary">
-          <div className="w-9 h-9 rounded-lg bg-primary-fixed text-on-primary-fixed flex items-center justify-center shrink-0 mt-0.5">
-            <MaterialIcon name="videocam" className="text-[20px]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary">
-                Next Clinical Visit
-              </span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                Tomorrow, 10:30 AM
-              </span>
-            </div>
-            <p className="font-headline-sm text-headline-sm text-on-surface mt-0.5 truncate">
-              Cardiology Telehealth Consultation
-            </p>
-            <Link
-              href="/care-directory"
-              className="inline-flex items-center gap-1 font-label-md text-label-md text-primary hover:underline mt-1.5"
-            >
-              <span>Join Prep Check</span>
-              <MaterialIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-          </div>
-        </div>
+        <article className="rounded-xl border border-outline-variant/30 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Next appointment</p>
+          {profile?.appointments[0] ? (
+            <>
+              <p className="mt-2 font-semibold text-on-surface">{profile.appointments[0].doctor.name}</p>
+              <p className="mt-1 text-sm text-on-surface-variant">{new Intl.DateTimeFormat('en-BD', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Dhaka' }).format(profile.appointments[0].scheduledAt)}</p>
+            </>
+          ) : <p className="mt-2 text-sm text-on-surface-variant">No upcoming appointment saved.</p>}
+          <Link href="/care-directory" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Find care <MaterialIcon name="arrow_forward" className="text-sm" /></Link>
+        </article>
 
-        {/* Alert 3: Medication Refill */}
-        <div className="bg-surface-container-lowest p-4 rounded-xl flex items-start gap-3.5 shadow-xs border-l-4 border-secondary">
-          <div className="w-9 h-9 rounded-lg bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center shrink-0 mt-0.5">
-            <MaterialIcon name="medication" className="text-[20px]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary">
-                Pharmacy Telemetry
-              </span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                Due in 3 Days
-              </span>
-            </div>
-            <p className="font-headline-sm text-headline-sm text-on-surface mt-0.5 truncate">
-              Lisinopril 10 mg Oral Tablet
-            </p>
-            <Link
-              href="/records?tab=prescriptions"
-              className="inline-flex items-center gap-1 font-label-md text-label-md text-secondary hover:underline mt-1.5"
-            >
-              <span>Request Refill</span>
-              <MaterialIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-          </div>
-        </div>
+        <article className="rounded-xl border border-outline-variant/30 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Active prescriptions</p>
+          {profile?.prescriptions.length ? (
+            <ul className="mt-2 space-y-1 text-sm text-on-surface">
+              {profile.prescriptions.map((prescription) => <li key={prescription.id}>{prescription.medicationName} · {prescription.dosage}</li>)}
+            </ul>
+          ) : <p className="mt-2 text-sm text-on-surface-variant">No active prescriptions saved.</p>}
+          <Link href="/records" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">View records <MaterialIcon name="arrow_forward" className="text-sm" /></Link>
+        </article>
       </section>
-
       {/* SECTION 2: HERO ACTION CARD — START AI-ASSISTED HEALTH ASSESSMENT */}
       <section className="bg-surface-container-low rounded-2xl p-6 shadow-sm relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -422,127 +376,36 @@ export default async function PatientDashboardPage() {
             </div>
           </section>
 
-          {/* Card: Upcoming Visits & Recommended Next Steps */}
-          <section className="bg-surface-container-lowest rounded-2xl p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-surface-container">
+          {/* Upcoming visits are drawn from this account's saved appointments. */}
+          <section className="rounded-2xl bg-surface-container-lowest p-6 shadow-xs">
+            <div className="mb-4 flex flex-col justify-between gap-2 border-b border-surface-container pb-4 sm:flex-row sm:items-center">
               <div>
-                <h2 className="font-headline-md text-headline-md text-on-surface">
-                  Upcoming Care Encounters
-                </h2>
-                <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  Scheduled appointments and pre-visit clinical preparation tasks
-                </p>
+                <h2 className="font-headline-md text-headline-md text-on-surface">Upcoming appointments</h2>
+                <p className="mt-0.5 font-body-sm text-body-sm text-on-surface-variant">Appointments linked to your account appear here.</p>
               </div>
-              <Link
-                href="/care-directory"
-                className="px-3.5 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-primary font-label-md text-label-md transition-colors inline-flex items-center gap-1.5 self-start sm:self-auto"
-              >
-                <MaterialIcon name="add" className="text-[16px]" />
-                <span>Schedule Visit</span>
+              <Link href="/care-directory" className="inline-flex items-center gap-1.5 self-start rounded-lg bg-surface-container-low px-3.5 py-1.5 font-label-md text-label-md text-primary transition-colors hover:bg-surface-container sm:self-auto">
+                <MaterialIcon name="search" className="text-[16px]" />
+                <span>Find care</span>
               </Link>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Visit 1 */}
-              <div className="p-4 rounded-xl bg-surface-container-low flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="px-2.5 py-0.5 rounded-md bg-primary text-on-primary font-label-sm text-label-sm">
-                      Video Telehealth
-                    </span>
-                    <span className="font-label-md text-label-md text-primary">
-                      Tomorrow • 10:30 AM
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-headline-sm font-bold shrink-0">
-                      AT
+            {profile?.appointments.length ? (
+              <div className="space-y-3">
+                {profile.appointments.map((appointment) => (
+                  <article key={appointment.id} className="rounded-xl bg-surface-container-low p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-headline-sm text-headline-sm text-on-surface">{appointment.doctor.name}</h3>
+                      <time className="text-sm font-semibold text-primary">
+                        {new Intl.DateTimeFormat('en-BD', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Dhaka' }).format(appointment.scheduledAt)}
+                      </time>
                     </div>
-                    <div>
-                      <h3 className="font-headline-sm text-headline-sm text-on-surface">
-                        Dr. Ayesha Rahman, MBBS, FCPS
-                      </h3>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">
-                        Cardiovascular &amp; Pulmonary Medicine • Pacific Heart Institute
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-outline-variant/20 flex items-center justify-between">
-                  <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                    <MaterialIcon name="check_circle" className="text-[15px] text-primary" />
-                    Triage packet shared
-                  </span>
-                  <Link
-                    href="/care-directory"
-                    className="font-label-md text-label-md text-primary hover:underline"
-                  >
-                    Manage Visit →
-                  </Link>
-                </div>
+                    <p className="mt-1 text-sm text-on-surface-variant">{appointment.doctor.specialty} · {appointment.modality === 'TELEHEALTH' ? 'Telehealth' : 'In person'}</p>
+                    <p className="mt-2 text-sm text-on-surface">{appointment.reason}</p>
+                  </article>
+                ))}
               </div>
-
-              {/* Visit 2 */}
-              <div className="p-4 rounded-xl bg-surface-container-low flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="px-2.5 py-0.5 rounded-md bg-surface-container-highest text-on-surface font-label-sm text-label-sm">
-                      In-Clinic Diagnostic
-                    </span>
-                    <span className="font-label-md text-label-md text-on-surface-variant">
-                      Nov 04, 2024 • 08:15 AM
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-surface-container-highest text-secondary flex items-center justify-center shrink-0">
-                      <MaterialIcon name="biotech" className="text-[22px]" />
-                    </div>
-                    <div>
-                      <h3 className="font-headline-sm text-headline-sm text-on-surface">
-                        LabCorp Diagnostics — Suite 200
-                      </h3>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">
-                        Fasting Lipid Panel &amp; HbA1c Blood Draw
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-outline-variant/20 flex items-center justify-between">
-                  <span className="font-body-sm text-body-sm text-error flex items-center gap-1">
-                    <MaterialIcon name="info" className="text-[15px]" />
-                    12h Fasting Required
-                  </span>
-                  <Link
-                    href="/records?tab=reports"
-                    className="font-label-md text-label-md text-primary hover:underline"
-                  >
-                    View Order →
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Recommended Pre-Visit Next Steps Checklist */}
-            <div className="mt-4 p-4 rounded-xl bg-surface-container/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <MaterialIcon name="checklist" className="text-primary text-[22px] mt-0.5" />
-                <div>
-                  <h4 className="font-headline-sm text-headline-sm text-on-surface">
-                    Recommended Next Steps Before Tomorrow&apos;s Visit
-                  </h4>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Log your morning resting blood pressure reading and confirm your active
-                    medication dosages.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/records"
-                className="px-4 py-2 rounded-lg bg-primary text-on-primary hover:bg-primary-container font-label-md text-label-md shrink-0 transition-colors text-center"
-              >
-                Log Vitals Now
-              </Link>
-            </div>
+            ) : (
+              <p className="rounded-xl bg-surface-container-low p-4 text-sm text-on-surface-variant">You have no upcoming appointments yet. Use Find care to browse available providers.</p>
+            )}
           </section>
 
           {/* Card: Recent Medical Records & Diagnostic Files */}
@@ -660,7 +523,7 @@ export default async function PatientDashboardPage() {
                   Blood Type
                 </span>
                 <p className="font-headline-md text-headline-md text-on-surface mt-0.5">
-                  {profile?.bloodType ?? 'O Positive (O+)'}
+                  {profile?.bloodType || 'Not provided'}
                 </p>
               </div>
               <div className="p-3 rounded-xl bg-surface-container-low">
@@ -668,67 +531,64 @@ export default async function PatientDashboardPage() {
                   Primary Care
                 </span>
                 <p className="font-headline-sm text-headline-sm text-on-surface mt-1 truncate">
-                  {profile?.primaryCarePhysician ?? 'Dr. Evelyn Vance, MD'}
+                  {profile?.primaryCarePhysician || 'Not added'}
                 </p>
               </div>
             </div>
 
-            {/* Clinical Summary Tags */}
             <div className="space-y-3.5">
-              {/* Allergies */}
-              <div className="p-3.5 rounded-xl bg-error-container/40">
-                <div className="flex items-center gap-1.5 text-error font-label-sm text-label-sm uppercase tracking-wider mb-1.5">
+              <section className="rounded-xl bg-surface-container-low p-3.5">
+                <h3 className="mb-2 flex items-center gap-1.5 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
                   <MaterialIcon name="warning" className="text-[15px]" />
-                  <span>Critical Allergy Flag</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="px-2.5 py-1 rounded-md bg-error text-on-error font-label-sm text-label-sm">
-                    Penicillin — Severe (Anaphylaxis)
-                  </span>
-                  <span className="px-2.5 py-1 rounded-md bg-surface-container-lowest text-on-error-container font-label-sm text-label-sm">
-                    Sulfa Antibiotics (Rash)
-                  </span>
-                </div>
-              </div>
+                  Allergies
+                </h3>
+                {profile?.allergies.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.allergies.map((allergy) => (
+                      <span key={allergy.id} className="rounded-md bg-error-container px-2.5 py-1 text-sm text-on-error-container">
+                        {allergy.substance} — {allergy.severity} ({allergy.reaction})
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-on-surface-variant">No allergies have been added to your profile.</p>
+                )}
+              </section>
 
-              {/* Active Conditions */}
-              <div className="p-3.5 rounded-xl bg-surface-container-low">
-                <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider block mb-1.5">
-                  Key Chronic Conditions
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="px-2.5 py-1 rounded-md bg-surface-container-lowest text-on-surface font-body-sm text-body-sm">
-                    Mild Persistent Asthma (J45.30)
-                  </span>
-                  <span className="px-2.5 py-1 rounded-md bg-surface-container-lowest text-on-surface font-body-sm text-body-sm">
-                    Essential Hypertension
-                  </span>
-                </div>
-              </div>
+              <section className="rounded-xl bg-surface-container-low p-3.5">
+                <h3 className="mb-2 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Health conditions</h3>
+                {profile?.conditions.length ? (
+                  <ul className="space-y-1.5">
+                    {profile.conditions.map((condition) => (
+                      <li key={condition.id} className="rounded-md bg-white px-2.5 py-1.5 text-sm text-on-surface">
+                        {condition.name} <span className="text-on-surface-variant">· {condition.status.toLowerCase()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-on-surface-variant">No health conditions have been added to your profile.</p>
+                )}
+              </section>
 
-              {/* Emergency Contact */}
-              <div className="p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between">
-                <div>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider block">
-                    Emergency Contact
-                  </span>
-                  <p className="font-headline-sm text-headline-sm text-on-surface mt-0.5">
-                    {profile?.emergencyContactName ?? 'David Jenkins (Spouse)'}
-                  </p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                    {profile?.emergencyContactPhone ?? '+1 (415) 890-3319'}
-                  </p>
-                </div>
-                <a
-                  href="tel:+14158903319"
-                  aria-label="Call Emergency Contact"
-                  className="w-9 h-9 rounded-lg bg-surface-container-lowest text-primary flex items-center justify-center shadow-2xs hover:bg-primary hover:text-on-primary transition-colors"
-                >
-                  <MaterialIcon name="call" className="text-[18px]" />
-                </a>
-              </div>
+              <section className="rounded-xl bg-surface-container-low p-3.5">
+                <h3 className="mb-1 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Emergency contact</h3>
+                {profile?.emergencyContactName || profile?.emergencyContactPhone ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-on-surface">{profile.emergencyContactName || 'Contact name not added'}</p>
+                      <p className="text-sm text-on-surface-variant">{profile.emergencyContactPhone || 'Phone number not added'}</p>
+                    </div>
+                    {profile.emergencyContactPhone && (
+                      <a href={'tel:' + profile.emergencyContactPhone} aria-label="Call emergency contact" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary hover:bg-primary hover:text-on-primary">
+                        <MaterialIcon name="call" className="text-[18px]" />
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-on-surface-variant">No emergency contact has been added to your profile.</p>
+                )}
+              </section>
             </div>
-
             <Link
               href="/records"
               className="mt-4 w-full py-2.5 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center justify-center gap-2 transition-colors"
@@ -738,94 +598,15 @@ export default async function PatientDashboardPage() {
             </Link>
           </section>
 
-          {/* Card: Recommended Specialists & Care Directory */}
-          <section className="bg-surface-container-lowest rounded-2xl p-6 shadow-xs">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-surface-container">
-              <div>
-                <h2 className="font-headline-md text-headline-md text-on-surface">
-                  Matched In-Network Care
-                </h2>
-                <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  Based on recent respiratory &amp; joint triage
-                </p>
-              </div>
-              <Link
-                href="/care-directory"
-                className="font-label-md text-label-md text-primary hover:underline"
-              >
-                Directory
-              </Link>
-            </div>
-
-            <div className="space-y-3.5">
-              {/* Doctor 1 */}
-              <div className="p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-headline-sm font-bold shrink-0">
-                    AT
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h3 className="font-headline-sm text-headline-sm text-on-surface truncate">
-                        Dr. Ayesha Rahman, MBBS, FCPS
-                      </h3>
-                      <span className="inline-flex items-center gap-0.5 font-label-sm text-label-sm text-primary">
-                        <MaterialIcon name="star" filled className="text-[13px]" />
-                        4.9
-                      </span>
-                    </div>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">
-                      Pulmonary &amp; Respiratory Medicine
-                    </p>
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-outline-variant/20">
-                      <span className="font-label-sm text-label-sm text-primary">
-                        Next Slot: Thu, 2:00 PM
-                      </span>
-                      <Link
-                        href="/care-directory?doctor=doc-aris-thorne"
-                        className="px-2.5 py-1 rounded-md bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary font-label-sm text-label-sm transition-colors"
-                      >
-                        Book Visit
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Doctor 2 */}
-              <div className="p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-headline-sm font-bold shrink-0">
-                    KR
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h3 className="font-headline-sm text-headline-sm text-on-surface truncate">
-                        Dr. Kavita Rao, DO
-                      </h3>
-                      <span className="inline-flex items-center gap-0.5 font-label-sm text-label-sm text-primary">
-                        <MaterialIcon name="star" filled className="text-[13px]" />
-                        4.8
-                      </span>
-                    </div>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">
-                      Orthopedics &amp; Sports Medicine
-                    </p>
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-outline-variant/20">
-                      <span className="font-label-sm text-label-sm text-secondary">
-                        Next Slot: Fri, 11:15 AM
-                      </span>
-                      <Link
-                        href="/care-directory?specialty=Orthopedics"
-                        className="px-2.5 py-1 rounded-md bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary font-label-sm text-label-sm transition-colors"
-                      >
-                        Book Visit
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <section className="rounded-2xl bg-surface-container-lowest p-6 shadow-xs">
+            <h2 className="font-headline-md text-headline-md text-on-surface">Find care in your area</h2>
+            <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+              Browse the care directory to see available providers. Appointments and profile details will appear here after they are added to your account.
+            </p>
+            <Link href="/care-directory" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-on-primary hover:bg-primary-container">
+              <MaterialIcon name="search" className="text-lg" />
+              Browse care directory
+            </Link>
           </section>
         </div>
       </div>

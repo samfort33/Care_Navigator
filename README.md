@@ -117,10 +117,19 @@ Patient media and voice uploads are disabled on Vercel until a durable private o
 
 ---
 
-## 5. Pre-Seeded Demo Personas (RBAC Evaluation)
+## 5. Local Test Accounts
 
-All seeded development fixtures are tagged with `isSeedFixture: true` in the database and can be switched anytime using the **Active Session Persona** menu in the top-right header (backed by `POST /api/auth/session`):
+The seeded patient and clinician accounts are for local development only. They include synthetic health records and are rejected in production. To use them locally, seed your local database and enable fixture login in the same PowerShell session before starting the app:
 
-1. **Patient Persona (`PATIENT`)**: **Nusrat Jahan** (`MRN: #CN-84920`) — Pre-populated with illustrative demo health records and active triage session `#CN-2026-8841`.
-2. **Attending Clinician Reviewer (`CLINICIAN`)**: **Dr. Ayesha Rahman, MBBS, FCPS** (`Internal Medicine & Pulmonology`) — Authorized to review triage sessions, sign clinical notes, and request supplemental patient files.
-3. **Clinical Operations Admin (`ADMIN`)**: **Dr. Farhan Ahmed, MBBS, MPH** (`Chief Medical Officer`) — Authorized to inspect `/admin/impact` telemetry and immutable `AuditLog` entries.
+```powershell
+npm run db:seed
+$env:CARE_NAVIGATOR_ENABLE_TEST_ACCOUNTS = "true"
+npm run dev
+```
+
+Both test accounts use `Password123!`:
+
+- Patient: `nusrat.jahan@carenavigator.example`
+- Clinician: `ayesha.rahman@carenavigator.example`
+
+The clinician fixture opens the clinician review workspace; the patient fixture opens the patient dashboard. Do not use these demo accounts for real health information. Public registration creates patient accounts only. Clinician access must be provisioned by a healthcare organization after verification.

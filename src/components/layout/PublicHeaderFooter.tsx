@@ -74,103 +74,34 @@ export function PublicHeaderFooter({ currentUser, children }: PublicHeaderFooter
       {/* Main Content */}
       <main className="flex-1">{children}</main>
 
-      {/* Footer */}
-      <footer className="border-t border-outline-variant/25 bg-surface-container-low pt-12 pb-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-gradient text-on-primary">
-                  <MaterialIcon name="health_and_safety" filled className="text-[18px]" />
-                </div>
-                <span className="text-base font-extrabold text-on-surface">CareNavigator</span>
+      <footer className="border-t border-outline-variant/25 bg-surface-container-low py-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-gradient text-on-primary">
+                <MaterialIcon name="health_and_safety" filled className="text-[18px]" />
               </div>
-              <p className="text-xs leading-relaxed text-on-surface-variant">
-                {t('Clinical decision support for clearer intake, transparent next steps, and clinician review.')}
-              </p>
+              <span className="text-base font-extrabold text-on-surface">CareNavigator</span>
             </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface">
-                {t('Patient Workspace')}
-              </h3>
-              <ul className="mt-3 space-y-2 text-xs text-on-surface-variant">
-                <li>
-                  <Link href="/dashboard" className="hover:text-primary">
-                    {t('Patient Dashboard')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/assessments/new" className="hover:text-primary">
-                    {t('AI Triage Workspace')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/assessments/media-voice" className="hover:text-primary">
-                    {t('Media & Voice Intake')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/records" className="hover:text-primary">
-                    {t('Health Profile & Lab Vault')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface">
-                {t('Clinical Verification')}
-              </h3>
-              <ul className="mt-3 space-y-2 text-xs text-on-surface-variant">
-                <li>
-                  <Link href="/assessments/CN-2026-8841/results" className="hover:text-primary">
-                    {t('Clinical Assessment Results')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/assessments/history" className="hover:text-primary">
-                    {t('Clinician Review Tracker')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/care-directory" className="hover:text-primary">
-                    {t('Specialist & Care Directory')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface">
-                {t('Governance & Trust')}
-              </h3>
-              <ul className="mt-3 space-y-2 text-xs text-on-surface-variant">
-                <li>
-                  <Link href="/settings/privacy" className="hover:text-primary">
-                    {t('Privacy & Consent Settings')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/notifications" className="hover:text-primary">
-                    {t('Notification Center')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/admin/impact" className="hover:text-primary">
-                    {t('CMO Impact & Audit Telemetry')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-outline-variant/25 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-on-surface-variant">
-            <p>© 2026 CareNavigator Clinical Systems. Non-Diagnostic Decision Support Platform.</p>
-            <p className="font-mono text-[11px]">
-              Emergency Protocol: Contact your local emergency service immediately for life-threatening symptoms.
+            <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">
+              Clinical decision support for clearer intake and care navigation. It does not replace a licensed clinician.
             </p>
           </div>
+          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-primary">
+            <Link href="/about" className="hover:underline">About</Link>
+            {currentUser ? (
+              <>
+                <Link href={currentUser.role === 'ADMIN' ? '/admin/impact' : currentUser.role === 'CLINICIAN' ? '/assessments/history' : '/dashboard'} className="hover:underline">My workspace</Link>
+                <Link href="/settings/privacy" className="hover:underline">Privacy settings</Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="hover:underline">Sign in</Link>
+                <Link href="/register" className="hover:underline">Create account</Link>
+              </>
+            )}
+          </nav>
+          <p className="text-xs text-on-surface-variant">Emergency in Bangladesh? Call 999.</p>
         </div>
       </footer>
     </div>

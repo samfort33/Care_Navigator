@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   CLINICAL_ADMIN_NAV_SECTIONS,
+  CLINICIAN_NAV_SECTIONS,
   PATIENT_NAV_SECTIONS,
   type NavSection,
 } from '@/lib/design-tokens';
@@ -35,16 +36,16 @@ export function WorkspaceShell({
   currentUser,
   unreadNotificationsCount,
   pendingReviewsCount,
-  portalMode = 'patient',
   children,
 }: WorkspaceShellProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-  const navSections: NavSection[] =
-    portalMode === 'clinical' || currentUser.role === 'ADMIN'
-      ? CLINICAL_ADMIN_NAV_SECTIONS
+  const navSections: NavSection[] = currentUser.role === 'ADMIN'
+    ? CLINICAL_ADMIN_NAV_SECTIONS
+    : currentUser.role === 'CLINICIAN'
+      ? CLINICIAN_NAV_SECTIONS
       : PATIENT_NAV_SECTIONS;
 
   function isRouteActive(href: string): boolean {

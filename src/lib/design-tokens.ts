@@ -138,13 +138,20 @@ export const CLINICAL_ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Provider Directory', href: '/care-directory', icon: 'person_search' },
     ],
   },
+];
+
+export const CLINICIAN_NAV_SECTIONS: NavSection[] = [
   {
-    title: 'Patient Workspace Preview',
+    title: 'Clinical Workspace',
     items: [
-      { label: 'Patient Dashboard', href: '/dashboard', icon: 'dashboard' },
-      { label: 'AI Triage Workspace', href: '/assessments/new', icon: 'vital_signs' },
-      { label: 'Medical Records Vault', href: '/records', icon: 'folder_shared' },
-      { label: 'Privacy & Governance', href: '/settings/privacy', icon: 'shield_lock' },
+      {
+        label: 'Clinician Review Queue',
+        href: '/reviews',
+        icon: 'assignment_ind',
+        badgeKey: 'pendingReviews',
+      },
+      { label: 'Review History', href: '/assessments/history', icon: 'history' },
+      { label: 'Provider Directory', href: '/care-directory', icon: 'person_search' },
     ],
   },
 ];
