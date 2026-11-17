@@ -11,7 +11,7 @@ import {
 import type { SessionUser } from '@/server/auth/session';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Emergency911Modal } from './Emergency911Modal';
-import { RolePersonaSwitcher } from './RolePersonaSwitcher';
+import { UserAccountMenu } from './UserAccountMenu';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/language';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -214,7 +214,7 @@ export function WorkspaceShell({
               )}
             </Link>
 
-            <RolePersonaSwitcher currentUser={currentUser} />
+            <UserAccountMenu currentUser={currentUser} />
           </div>
         </header>
 

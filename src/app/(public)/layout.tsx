@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerSession, DEMO_PERSONAS } from '@/server/auth/session';
+import { getServerSession } from '@/server/auth/session';
 import { PublicHeaderFooter } from '@/components/layout/PublicHeaderFooter';
 
 export default async function PublicLayout({
@@ -7,6 +7,6 @@ export default async function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = (await getServerSession()) ?? DEMO_PERSONAS.PATIENT;
+  const session = await getServerSession({ strictCookieOnly: true });
   return <PublicHeaderFooter currentUser={session}>{children}</PublicHeaderFooter>;
 }

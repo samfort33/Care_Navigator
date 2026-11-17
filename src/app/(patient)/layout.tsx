@@ -1,14 +1,19 @@
 import React from 'react';
-import { getServerSession, DEMO_PERSONAS } from '@/server/auth/session';
+import { getServerSession } from '@/server/auth/session';
 import { prisma } from '@/lib/prisma';
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
+import { redirect } from 'next/navigation';
 
 export default async function PatientWorkspaceLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = (await getServerSession()) ?? DEMO_PERSONAS.PATIENT;
+  const session = await getServerSession({ strictCookieOnly: true });
+  if (!session) redirect('/login');
+  if (session.role !== 'PATIENT') {
+    redirect(session.role === 'ADMIN' ? '/admin/impact' : '/assessments/history');
+  }
 
   const [unreadNotificationsCount, pendingReviewsCount] = await Promise.all([
     prisma.notification.count({

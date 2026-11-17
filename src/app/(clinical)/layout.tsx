@@ -1,22 +1,21 @@
 import React from 'react';
-import { getServerSession, DEMO_PERSONAS } from '@/server/auth/session';
+import { getServerSession } from '@/server/auth/session';
 import { prisma } from '@/lib/prisma';
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
+import { redirect } from 'next/navigation';
 
 export default async function ClinicalPortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const rawSession = await getServerSession();
-  const session =
-    rawSession && (rawSession.role === 'CLINICIAN' || rawSession.role === 'ADMIN')
-      ? rawSession
-      : DEMO_PERSONAS.ADMIN;
+  const session = await getServerSession({ strictCookieOnly: true });
+  if (!session) redirect('/login');
+  if (session.role === 'PATIENT') redirect('/dashboard');
 
   const [unreadNotificationsCount, pendingReviewsCount] = await Promise.all([
     prisma.notification.count({
-      where: { userId: DEMO_PERSONAS.PATIENT.id, isRead: false, isDismissed: false },
+      where: { userId: session.id, isRead: false, isDismissed: false },
     }),
     prisma.triageSession.count({
       where: { status: 'PENDING_REVIEW' },

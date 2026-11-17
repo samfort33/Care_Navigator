@@ -5,12 +5,12 @@ import Link from 'next/link';
 import type { SessionUser } from '@/server/auth/session';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Emergency911Modal } from './Emergency911Modal';
-import { RolePersonaSwitcher } from './RolePersonaSwitcher';
+import { UserAccountMenu } from './UserAccountMenu';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { useLanguage } from '@/lib/language';
 
 export interface PublicHeaderFooterProps {
-  currentUser: SessionUser;
+  currentUser: SessionUser | null;
   children: React.ReactNode;
 }
 
@@ -59,14 +59,14 @@ export function PublicHeaderFooter({ currentUser, children }: PublicHeaderFooter
             <div className="hidden lg:block">
               <Emergency911Modal variant="header-pill" />
             </div>
-            <RolePersonaSwitcher currentUser={currentUser} />
-            <Link
-              href="/assessments/new"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-primary-gradient px-4 py-2 text-xs font-bold text-on-primary shadow-sm transition hover:opacity-95"
-            >
-              <span>{t('Start Assessment')}</span>
-              <MaterialIcon name="arrow_forward" className="text-[16px]" />
-            </Link>
+            {currentUser ? (
+              <UserAccountMenu currentUser={currentUser} />
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-semibold text-primary hover:bg-surface-container-low">{t('Sign In')}</Link>
+                <Link href="/register" className="rounded-xl bg-primary px-3.5 py-2 text-sm font-semibold text-on-primary hover:bg-primary-container">{t('Create Account')}</Link>
+              </div>
+            )}
           </div>
         </div>
       </header>
