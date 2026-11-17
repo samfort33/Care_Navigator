@@ -13,8 +13,12 @@ function run(command, args) {
 if (isProduction) {
   const directUrl = process.env.DATABASE_URL ?? '';
   const pooledUrl = process.env.DATABASE_URL_POOLED ?? '';
+  const authSecret = process.env.AUTH_SECRET ?? '';
   if (!/^postgres(?:ql)?:\/\//i.test(directUrl) || !/^postgres(?:ql)?:\/\//i.test(pooledUrl)) {
     throw new Error('Production deployment requires direct DATABASE_URL and pooled DATABASE_URL_POOLED values.');
+  }
+  if (authSecret.length < 32 || authSecret.startsWith('dev-only-')) {
+    throw new Error('Production deployment requires a unique AUTH_SECRET of at least 32 characters.');
   }
   run(npx, ['prisma', 'migrate', 'deploy', '--schema=prisma/postgres/schema.prisma']);
 }

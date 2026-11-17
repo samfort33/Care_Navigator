@@ -107,7 +107,7 @@ Vercel deployments use the PostgreSQL schema. Do not use the local SQLite file f
 2. Add a PostgreSQL integration from the Vercel Marketplace. Prisma Postgres provides `DATABASE_URL` (direct, for migrations) and `DATABASE_URL_POOLED` (pooled, for application requests).
 3. Add a unique `AUTH_SECRET` with at least 32 characters. Set `NEXTAUTH_URL` to the deployed site URL.
 4. Keep these values in Vercel’s encrypted environment settings. Never commit them to GitHub or expose them with a `NEXT_PUBLIC_` prefix.
-5. Deploy the `main` branch. `vercel.json` runs `npm run vercel-build`, which applies PostgreSQL migrations on production deployments before building the Next.js app. Preview deployments build without applying production migrations.
+5. Deploy the `main` branch. `vercel.json` runs `npm run vercel-build`, which applies PostgreSQL migrations on production deployments before building the Next.js app. Non-production deployments are skipped until they have an isolated Preview database, so Preview code cannot reach the Production database.
 
 The local developer workflow remains SQLite-backed: `npm run dev` generates the local Prisma Client before starting Next.js. Production migrations live separately under `prisma/postgres/migrations`.
 
