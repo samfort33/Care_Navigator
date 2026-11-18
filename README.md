@@ -1,5 +1,8 @@
 # CareNavigator — AI-Assisted Clinical Triage & Care Navigation Platform
 
+Demo -https://care-navigator-delta.vercel.app/login
+to view the website create an account.
+
 **CareNavigator** is a full-stack, HIPAA-conscious healthcare assessment and care-navigation web application built around the **"Sanctuary of Clinical Clarity"** design system. It combines multimodal AI symptom intake (chat, voice, clinical photos, and lab PDFs), a deterministic clinical red-flag safety engine, grounded clinical guideline retrieval (GINA, ACP, NICE), longitudinal health records, human-in-the-loop clinician verification, and smart specialist routing.
 
 > **Medical Disclaimer**: CareNavigator provides AI-assisted clinical decision support and care navigation. All AI outputs are non-diagnostic considerations and do not replace professional medical advice, diagnosis, or treatment. In Bangladesh, call **999** or proceed to the nearest emergency department immediately.
