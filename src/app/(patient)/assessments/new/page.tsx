@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -14,39 +14,23 @@ interface TranscriptTurn {
   text: string;
 }
 
-const INITIAL_TRANSCRIPT: TranscriptTurn[] = [];
+const INITIAL_TRANSCRIPT: TranscriptTurn[] = [
+  {
+    id: 't-eng-0',
+    sender: 'ENGINE',
+    senderLabel: 'CareNavigator Intake Guide',
+    timestamp: 'Just now',
+    text: 'Hello, I am your CareNavigator clinical intake guide. What symptoms are you experiencing today, and approximately when did they begin?',
+  },
+];
 
-const QUICK_PILLS = [
-  {
-    id: 'dull',
-    label: 'Dull ache or tightness only',
-    appendText: 'Dull ache or tightness only.',
-  },
-  {
-    id: 'sharp',
-    label: 'Sharp, stabbing pain on inhale',
-    appendText: 'Sharp, stabbing pain on inhale.',
-  },
-  {
-    id: 'radiating',
-    label: 'Radiates to shoulder, back, or jaw',
-    appendText: 'Crushing chest pain radiating to left arm and jaw.',
-  },
-  {
-    id: 'cough-only',
-    label: 'Occurs only during coughing fits',
-    appendText: 'Occurs only during coughing fits.',
-  },
-  {
-    id: 'relieved-upright',
-    label: 'Relieved by sitting upright',
-    appendText: 'Relieved by sitting upright.',
-  },
-  {
-    id: 'no-pain',
-    label: 'No pain on deep inhalation',
-    appendText: 'No pain on deep inhalation.',
-  },
+const INITIAL_PILLS = [
+  'Dry cough & chest tightness for 3 days',
+  'Throbbing headache with light sensitivity',
+  'Fever, body aches, and fatigue',
+  'Sharp chest discomfort on deep breath',
+  'Stomach cramping and nausea',
+  'Skin rash with mild itching',
 ];
 
 export type AssessmentSubmissionState =
@@ -60,57 +44,153 @@ export type AssessmentSubmissionState =
 
 export default function NewAssessmentWorkspacePage() {
   const router = useRouter();
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+
   const [step, setStep] = useState(1);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>(INITIAL_TRANSCRIPT);
+  const [availablePills, setAvailablePills] = useState<string[]>(INITIAL_PILLS);
   const [selectedPills, setSelectedPills] = useState<string[]>([]);
   const [notesInput, setNotesInput] = useState('');
   const [includeEhrConsent, setIncludeEhrConsent] = useState(true);
   const [draftSavedBanner, setDraftSavedBanner] = useState<string | null>(null);
 
+  // Dynamic AI conversation states
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [activeTopic, setActiveTopic] = useState('Chief Complaint & Onset Timeline');
+  const [activeQuestion, setActiveQuestion] = useState(
+    'What symptoms are you experiencing today, and when did they begin?'
+  );
+  const [extractedEntities, setExtractedEntities] = useState<{
+    symptoms: string[];
+    pertinentNegatives: string[];
+    duration: string;
+    severity: string;
+  }>({
+    symptoms: ['Awaiting intake narrative'],
+    pertinentNegatives: ['Emergency screening active'],
+    duration: 'Under evaluation',
+    severity: 'Initial intake',
+  });
+  const [preliminaryAcuity, setPreliminaryAcuity] = useState<
+    'SELF_CARE' | 'ROUTINE' | 'URGENT' | 'EMERGENCY'
+  >('ROUTINE');
+  const [isReadyForFinal, setIsReadyForFinal] = useState(false);
+
   // State machine for submission
   const [submissionState, setSubmissionState] = useState<AssessmentSubmissionState>('IDLE');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [, setCreatedSessionId] = useState<string | null>(null);
 
   // Live deterministic red-flag screening on current input
   const redFlagCheck = evaluateRedFlags(notesInput);
 
-  function togglePill(pill: (typeof QUICK_PILLS)[number]) {
+  // Auto-scroll transcript on new turns
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript, isAiThinking]);
+
+  function handlePillClick(pillText: string) {
     setDraftSavedBanner(null);
-    const isAlreadySelected = selectedPills.includes(pill.id);
-    if (isAlreadySelected) {
-      setSelectedPills((prev) => prev.filter((id) => id !== pill.id));
-      setNotesInput((prev) => prev.replace(pill.appendText, '').trim());
+    if (selectedPills.includes(pillText)) {
+      setSelectedPills((prev) => prev.filter((p) => p !== pillText));
+      setNotesInput((prev) => prev.replace(pillText, '').trim());
     } else {
-      setSelectedPills((prev) => [...prev, pill.id]);
-      setNotesInput((prev) => (prev ? `${prev} ${pill.appendText}` : pill.appendText));
+      setSelectedPills((prev) => [...prev, pillText]);
+      setNotesInput((prev) => (prev ? `${prev}. ${pillText}` : pillText));
     }
   }
 
-  function handleContinueStep() {
+  async function handleSendTurn(customText?: string) {
     setDraftSavedBanner(null);
-    if (!notesInput.trim()) return;
+    const textToSend = (customText || notesInput).trim();
+    if (!textToSend || isAiThinking) return;
 
+    const patientTurnId = `t-pat-${Date.now()}`;
     const newPatientTurn: TranscriptTurn = {
-      id: `t-pat-${Date.now()}`,
+      id: patientTurnId,
       sender: 'PATIENT',
       senderLabel: 'You (Patient)',
-      timestamp: '10:44 AM',
-      text: notesInput.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: textToSend,
     };
 
-    const nextEngineTurn: TranscriptTurn = {
-      id: `t-eng-${Date.now() + 1}`,
-      sender: 'ENGINE',
-      senderLabel: 'CareNavigator Intake Guide',
-      timestamp: '10:44 AM',
-      text: redFlagCheck.triggered
-        ? 'CRITICAL ALERT: Your reported symptoms match an acute emergency red-flag rule. Automated non-urgent intake is paused—please call 999 or seek immediate emergency department evaluation.'
-        : 'Recorded. Step 4 of 6: Have you noticed any wheezing, nocturnal cough waking you from sleep, or need to use your rescue inhaler more than twice this week?',
-    };
+    // Update transcript and clear input immediately
+    const updatedMessages = [...transcript, newPatientTurn];
+    setTranscript(updatedMessages);
+    setNotesInput('');
+    setSelectedPills([]);
+    setIsAiThinking(true);
 
-    setTranscript((prev) => [...prev, newPatientTurn, nextEngineTurn]);
-    setStep((prev) => Math.min(6, prev + 1));
+    try {
+      const response = await fetch('/api/assessments/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map((m) => ({
+            id: m.id,
+            sender: m.sender,
+            text: m.text,
+          })),
+          input: textToSend,
+          includeEhrContext: includeEhrConsent,
+          currentStep: step,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reach AI intake guide.');
+      }
+
+      const resJson = await response.json();
+      if (resJson.success && resJson.data) {
+        const data = resJson.data;
+
+        const aiTurn: TranscriptTurn = {
+          id: `t-eng-${Date.now()}`,
+          sender: 'ENGINE',
+          senderLabel: 'CareNavigator Intake Guide',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: data.reply,
+        };
+
+        setTranscript((prev) => [...prev, aiTurn]);
+
+        if (Array.isArray(data.suggestedPills) && data.suggestedPills.length > 0) {
+          setAvailablePills(data.suggestedPills);
+        }
+        if (data.activeTopic) setActiveTopic(data.activeTopic);
+        if (data.activeQuestion) setActiveQuestion(data.activeQuestion);
+        if (data.nextStep) setStep(Math.min(6, data.nextStep));
+        if (data.extractedEntities) setExtractedEntities(data.extractedEntities);
+        if (data.preliminaryAcuity) setPreliminaryAcuity(data.preliminaryAcuity);
+        if (data.isReadyForFinalAssessment || data.nextStep >= 4) {
+          setIsReadyForFinal(true);
+        }
+      } else {
+        throw new Error(resJson.error || 'Unexpected response format.');
+      }
+    } catch {
+      // Offline fallback turn
+      const fallbackTurn: TranscriptTurn = {
+        id: `t-eng-${Date.now()}`,
+        sender: 'ENGINE',
+        senderLabel: 'CareNavigator Intake Guide',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `Recorded: "${textToSend}". Do your symptoms change noticeably with physical activity, deep breathing, or resting in a comfortable position?`,
+      };
+      setTranscript((prev) => [...prev, fallbackTurn]);
+      setStep((prev) => Math.min(6, prev + 1));
+      setAvailablePills([
+        'Worse with movement or exertion',
+        'Relieved when sitting upright',
+        'Occurs primarily at rest',
+        'No noticeable change with position',
+      ]);
+      setActiveTopic('Associated Factors & Posture');
+      setActiveQuestion('Do your symptoms change with posture, breathing, or exertion?');
+      setIsReadyForFinal(step >= 3);
+    } finally {
+      setIsAiThinking(false);
+    }
   }
 
   async function handleSubmitAssessment() {
@@ -120,24 +200,27 @@ export default function NewAssessmentWorkspacePage() {
       submissionState === 'VALIDATING' ||
       submissionState === 'SUCCESS'
     ) {
-      return; // prevent duplicate clicks
+      return;
     }
 
     setSubmissionError(null);
     setSubmissionState('VALIDATING');
 
-    const chiefComplaint = notesInput.trim();
+    const patientTurns = transcript.filter((t) => t.sender === 'PATIENT');
+    const narrativeFromChat = patientTurns.map((t) => t.text).join('; ');
+    const chiefComplaint = notesInput.trim() || narrativeFromChat || 'General clinical assessment';
+
     if (chiefComplaint.length < 5) {
       setSubmissionState('SUBMISSION_ERROR');
       setSubmissionError('Please describe your symptoms and when they began before continuing.');
       return;
     }
+
     const finalPleuriticDetails = chiefComplaint;
     const currentRedFlag = evaluateRedFlags(finalPleuriticDetails);
 
     setSubmissionState('SUBMITTING');
 
-    // Local MedGemma inference can take up to 120 seconds on consumer hardware.
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => {
       controller.abort();
@@ -155,9 +238,11 @@ export default function NewAssessmentWorkspacePage() {
           chiefComplaint,
           includeEhrContext: includeEhrConsent,
           confidenceScore: currentRedFlag.triggered ? 99 : 88,
-          acuityLevel: currentRedFlag.triggered ? 'EMERGENCY' : 'ROUTINE',
+          acuityLevel: currentRedFlag.triggered ? 'EMERGENCY' : preliminaryAcuity,
           recommendedCareSetting: currentRedFlag.triggered
             ? 'Immediate Emergency Department Evaluation / Call 999'
+            : preliminaryAcuity === 'URGENT'
+            ? 'Urgent Care or Same-Day Clinic Evaluation'
             : 'Outpatient Primary Care or Telehealth Consultation',
           answers: [
             {
@@ -182,10 +267,7 @@ export default function NewAssessmentWorkspacePage() {
         throw new Error('Assessment created but session ID not returned.');
       }
 
-      setCreatedSessionId(result.session.id);
       setSubmissionState('SUCCESS');
-
-      // Navigate to the real results route
       router.push(`/assessments/${result.session.id}/results`);
     } catch (err: unknown) {
       clearTimeout(timeoutTimer);
@@ -217,7 +299,9 @@ export default function NewAssessmentWorkspacePage() {
       <section
         aria-label="Clinical Safety & Emergency Escalation"
         className={`rounded-xl bg-error-container text-on-error-container p-4 shadow-sm transition-all ${
-          redFlagCheck.triggered ? 'ring-2 ring-error animate-pulse' : ''
+          redFlagCheck.triggered || preliminaryAcuity === 'EMERGENCY'
+            ? 'ring-2 ring-error animate-pulse'
+            : ''
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -230,7 +314,7 @@ export default function NewAssessmentWorkspacePage() {
                 <span className="font-headline-sm text-headline-sm text-on-error-container font-bold">
                   {redFlagCheck.triggered
                     ? `Deterministic Red Flag Triggered (${redFlagCheck.matchedRules[0]?.ruleId}): Seek immediate emergency care`
-                    : 'Urgent symptom pattern identified: Seek immediate emergency care'}
+                    : 'Emergency Safety Protocol Active'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-error text-on-error font-label-sm text-label-sm uppercase tracking-wider">
                   High Alert Protocol
@@ -283,7 +367,7 @@ export default function NewAssessmentWorkspacePage() {
 
       {/* Main 12-Column Clinical Triage Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN (8 Cols): Interactive Symptom Assessment & Guided Intake */}
+        {/* LEFT COLUMN (8 Cols): Interactive AI Symptom Assessment & Guided Intake */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Assessment Progress & Session Tracker */}
           <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
@@ -291,22 +375,22 @@ export default function NewAssessmentWorkspacePage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary font-semibold">
-                    Session #TR-9021-X
+                    AI Clinical Intake Session
                   </span>
                   <span className="text-outline-variant">•</span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant">
-                    Started Today at 10:41 AM
+                    Interactive Triage Guide Active
                   </span>
                 </div>
                 <h1 className="font-headline-lg text-headline-lg text-on-surface mt-0.5">
-                  Respiratory &amp; Chest Symptom Evaluation
+                  AI Health Assessment &amp; Triage Workspace
                 </h1>
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-center">
                 <span className="px-3 py-1 rounded-full bg-surface-container text-primary font-label-md text-label-md flex items-center gap-1.5">
-                  <MaterialIcon name="pulmonology" className="text-[16px]" />
-                  <span>Cardiopulmonary Triage</span>
+                  <MaterialIcon name="smart_toy" className="text-[16px]" />
+                  <span>Interactive AI Guide</span>
                 </span>
               </div>
             </div>
@@ -315,11 +399,9 @@ export default function NewAssessmentWorkspacePage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between font-label-md text-label-md">
                 <span className="text-on-surface">
-                  Progress: Question {step} of 6 • {progressPercent}% Complete
+                  Progress: Step {step} of 6 • {progressPercent}% Complete
                 </span>
-                <span className="text-secondary">
-                  Current Stage: Associated Risk Factor Screening
-                </span>
+                <span className="text-secondary font-medium">Stage: {activeTopic}</span>
               </div>
               <div className="grid grid-cols-6 gap-1.5 h-2">
                 {[1, 2, 3, 4, 5, 6].map((idx) => (
@@ -336,34 +418,29 @@ export default function NewAssessmentWorkspacePage() {
                 ))}
               </div>
               <div className="flex items-center justify-between font-label-sm text-label-sm text-outline pt-0.5">
-                <span>1. Chief Complaint</span>
-                <span>2. Onset &amp; Timeline</span>
-                <span className="text-primary font-semibold">3. Pleuritic &amp; Pain Check</span>
-                <span>4. Medical History</span>
-                <span>5. Vitals Sync</span>
-                <span>6. Triage Output</span>
+                <span className={step >= 1 ? 'text-primary font-semibold' : ''}>1. Chief Complaint</span>
+                <span className={step >= 2 ? 'text-primary font-semibold' : ''}>2. Timeline</span>
+                <span className={step >= 3 ? 'text-primary font-semibold' : ''}>3. Characteristics</span>
+                <span className={step >= 4 ? 'text-primary font-semibold' : ''}>4. Triggers</span>
+                <span className={step >= 5 ? 'text-primary font-semibold' : ''}>5. Context</span>
+                <span className={step >= 6 ? 'text-primary font-semibold' : ''}>6. Results</span>
               </div>
             </div>
           </div>
 
-          {/* Conversational History / Prior Answers Log */}
+          {/* Conversational History / Real Multi-Turn Dialogue */}
           <div className="bg-surface-container-low rounded-xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <span className="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant flex items-center gap-1.5">
                 <MaterialIcon name="forum" className="text-[16px] text-primary" />
-                <span>Conversational Transcript (Steps 1–{step - 1})</span>
+                <span>Conversational Intake Transcript ({transcript.length} turns)</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="font-label-md text-label-md text-secondary hover:underline flex items-center gap-1"
-              >
-                <MaterialIcon name="edit" className="text-[14px]" />
-                <span>Edit Previous Responses</span>
-              </button>
+              <span className="font-label-sm text-label-sm text-outline">
+                Encrypted Real-Time Clinical Dialogue
+              </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
               {transcript.map((turn) =>
                 turn.sender === 'ENGINE' ? (
                   <div key={turn.id} className="flex items-start gap-3">
@@ -372,70 +449,94 @@ export default function NewAssessmentWorkspacePage() {
                     </div>
                     <div className="bg-surface-container-lowest rounded-xl rounded-tl-none p-4 shadow-xs max-w-2xl">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-label-md text-label-md text-primary">
+                        <span className="font-label-md text-label-md text-primary font-semibold">
                           {turn.senderLabel}
                         </span>
                         <span className="font-label-sm text-label-sm text-outline">
                           {turn.timestamp}
                         </span>
                       </div>
-                      <p className="font-body-md text-body-md text-on-surface">{turn.text}</p>
+                      <p className="font-body-md text-body-md text-on-surface leading-relaxed">
+                        {turn.text}
+                      </p>
                     </div>
                   </div>
                 ) : (
                   <div key={turn.id} className="flex items-start justify-end gap-3">
-                    <div className="bg-secondary-container/40 rounded-xl rounded-tr-none p-4 max-w-xl">
+                    <div className="bg-secondary-container/50 rounded-xl rounded-tr-none p-4 max-w-xl shadow-xs">
                       <div className="flex items-center justify-end gap-2 mb-1">
                         <span className="font-label-sm text-label-sm text-outline">
                           {turn.timestamp}
                         </span>
-                        <span className="font-label-md text-label-md text-on-secondary-container">
+                        <span className="font-label-md text-label-md text-on-secondary-container font-semibold">
                           {turn.senderLabel}
                         </span>
                       </div>
-                      <p className="font-body-md text-body-md text-on-surface">{turn.text}</p>
+                      <p className="font-body-md text-body-md text-on-surface leading-relaxed">
+                        {turn.text}
+                      </p>
                     </div>
                   </div>
                 )
               )}
+
+              {isAiThinking && (
+                <div className="flex items-start gap-3 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-primary/70 text-on-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <MaterialIcon name="smart_toy" className="text-[18px]" />
+                  </div>
+                  <div className="bg-surface-container-lowest rounded-xl rounded-tl-none p-3.5 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-label-md text-label-md text-primary">
+                        CareNavigator Intake Guide is evaluating...
+                      </span>
+                      <span className="flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.2s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.4s]" />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={transcriptEndRef} />
             </div>
           </div>
 
-          {/* Active Question & Multimodal Response Card */}
+          {/* Active Question & Dynamic Response Card */}
           <div className="bg-surface-container-lowest rounded-xl p-6 shadow-md space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1.5">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm uppercase tracking-wider">
                   <MaterialIcon name="radar" className="text-[14px]" />
-                  <span>Active Step {step} • Pleuritic Differentiation</span>
+                  <span>Active Step {step} • {activeTopic}</span>
                 </div>
                 <h2 className="font-headline-md text-headline-md text-on-surface">
-                  How would you characterize the discomfort when taking a full deep breath?
+                  {activeQuestion}
                 </h2>
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  Select all characteristics that apply or describe your symptoms in your own words
-                  below. This helps distinguish airway irritation from pleural or cardiac
-                  involvement.
+                  Select a suggested clinical response below, or type your answer in your own words.
+                  The AI intake guide continuously personalizes each follow-up to your exact symptoms.
                 </p>
               </div>
             </div>
 
-            {/* Quick-Symptom Interactive Pills */}
+            {/* Dynamic AI Suggested Quick-Select Pills */}
             <div className="space-y-2.5">
               <span className="font-label-md text-label-md text-on-surface-variant block">
-                Quick-Select Clinical Descriptors:
+                Suggested Responses (Click to select or combine):
               </span>
               <div className="flex flex-wrap gap-2" id="symptom-pills-container">
-                {QUICK_PILLS.map((pill) => {
-                  const active = selectedPills.includes(pill.id);
+                {availablePills.map((pillText) => {
+                  const active = selectedPills.includes(pillText);
                   return (
                     <button
-                      key={pill.id}
+                      key={pillText}
                       type="button"
-                      onClick={() => togglePill(pill)}
+                      onClick={() => handlePillClick(pillText)}
                       className={`quick-pill inline-flex items-center gap-2 px-3.5 py-2 rounded-lg font-label-md text-label-md transition-all cursor-pointer ${
                         active
-                          ? 'bg-primary-container text-on-primary-container shadow-xs'
+                          ? 'bg-primary-container text-on-primary-container shadow-xs ring-1 ring-primary'
                           : 'bg-surface-container-low text-on-surface hover:bg-surface-container-high'
                       }`}
                     >
@@ -443,7 +544,7 @@ export default function NewAssessmentWorkspacePage() {
                         name={active ? 'check_circle' : 'add'}
                         className="text-[16px]"
                       />
-                      <span>{pill.label}</span>
+                      <span>{pillText}</span>
                     </button>
                   );
                 })}
@@ -457,10 +558,10 @@ export default function NewAssessmentWorkspacePage() {
                   htmlFor="clinical-notes-input"
                   className="font-label-md text-label-md text-on-surface"
                 >
-                  Additional Details or Context (Optional)
+                  Your Response (Type freely or send selected options)
                 </label>
                 <span className="font-label-sm text-label-sm text-outline">
-                  Encrypted Real-Time NLP Parsing
+                  Press Enter to send
                 </span>
               </div>
 
@@ -470,7 +571,13 @@ export default function NewAssessmentWorkspacePage() {
                   rows={3}
                   value={notesInput}
                   onChange={(e) => setNotesInput(e.target.value)}
-                  placeholder="Describe any triggers, posture changes, or recent exposures (e.g., 'Feels like a dull tightness across my breastbone after coughing, eases up when I sit still and drink warm water')..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendTurn();
+                    }
+                  }}
+                  placeholder="Describe your symptoms, how they started, or any other details you'd like your doctor to know..."
                   className="w-full bg-transparent text-on-surface placeholder-outline font-body-md text-body-md resize-none focus:outline-none"
                 />
 
@@ -483,7 +590,7 @@ export default function NewAssessmentWorkspacePage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-label-md text-label-md transition-colors shadow-2xs bg-surface-container-lowest text-primary hover:bg-surface-container-high"
                     >
                       <MaterialIcon name="mic" className="text-[18px]" />
-                      <span>Open Voice Intake</span>
+                      <span>Voice Recording</span>
                     </Link>
 
                     <Link
@@ -491,19 +598,24 @@ export default function NewAssessmentWorkspacePage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high font-label-md text-label-md transition-colors shadow-2xs"
                     >
                       <MaterialIcon name="attach_file" className="text-[18px]" />
-                      <span>Attach Photo / Peak Flow Log</span>
+                      <span>Attach Photo / Lab PDF</span>
                     </Link>
                   </div>
 
-                  <span className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
-                    <MaterialIcon name="verified" className="text-[14px] text-primary" />
-                    <span>SNOMED-CT Concept Mapping Active</span>
-                  </span>
+                  <button
+                    type="button"
+                    disabled={!notesInput.trim() || isAiThinking}
+                    onClick={() => handleSendTurn()}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-primary/90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                  >
+                    <span>Send Message</span>
+                    <MaterialIcon name="send" className="text-[16px]" />
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Submission State Banner (Timeout, Error, or Progress) */}
+            {/* Submission State Banner */}
             {submissionError && (
               <div
                 role="alert"
@@ -514,13 +626,10 @@ export default function NewAssessmentWorkspacePage() {
                   <div className="space-y-1">
                     <span className="font-semibold block text-on-error-container">
                       {submissionState === 'TIMEOUT_ERROR'
-                        ? 'Submission Request Timed Out (15s)'
+                        ? 'Submission Request Timed Out'
                         : 'Assessment Submission Failed'}
                     </span>
                     <p className="text-on-error-container/90">{submissionError}</p>
-                    <p className="text-xs text-on-error-container/70">
-                      Your responses are preserved. You can click retry below to resubmit without losing data.
-                    </p>
                   </div>
                 </div>
                 <button
@@ -547,35 +656,32 @@ export default function NewAssessmentWorkspacePage() {
               </div>
             )}
 
-            {/* Question Card Navigation Controls */}
+            {/* Bottom Actions Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.max(1, s - 1))}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high font-label-lg text-label-lg transition-colors"
+                onClick={handleSaveDraft}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-surface-container-low text-secondary hover:bg-surface-container font-label-lg text-label-lg transition-colors"
               >
-                <MaterialIcon name="arrow_back" className="text-[18px]" />
-                <span>Review Previous</span>
+                Save Draft
               </button>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-lg bg-surface-container-low text-secondary hover:bg-surface-container font-label-lg text-label-lg transition-colors"
-                >
-                  Save &amp; Exit
-                </button>
-                {step < 6 ? (
+                {/* Secondary action: Continue turn */}
+                {notesInput.trim() && (
                   <button
                     type="button"
-                    onClick={handleContinueStep}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary-gradient text-on-primary font-label-lg text-label-lg shadow-sm hover:opacity-95 transition-opacity"
+                    disabled={isAiThinking}
+                    onClick={() => handleSendTurn()}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg shadow-sm hover:opacity-95 transition-opacity"
                   >
-                    <span>Continue to Next Question</span>
+                    <span>Continue Conversation</span>
                     <MaterialIcon name="arrow_forward" className="text-[18px]" />
                   </button>
-                ) : (
+                )}
+
+                {/* Primary Final Action: Submit Assessment when enough info gathered */}
+                {(isReadyForFinal || transcript.filter((t) => t.sender === 'PATIENT').length >= 2) && (
                   <button
                     type="button"
                     disabled={
@@ -585,20 +691,20 @@ export default function NewAssessmentWorkspacePage() {
                       submissionState === 'SUCCESS'
                     }
                     onClick={handleSubmitAssessment}
-                    className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-label-lg text-label-lg shadow-sm transition-all ${
+                    className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-label-lg text-label-lg shadow-md transition-all ${
                       submissionState === 'SUCCESS'
                         ? 'bg-acuity-selfcare text-white'
-                        : submissionState === 'SUBMITTING' || submissionState === 'PROCESSING' || submissionState === 'VALIDATING'
+                        : submissionState === 'SUBMITTING' ||
+                          submissionState === 'PROCESSING' ||
+                          submissionState === 'VALIDATING'
                         ? 'bg-primary/70 text-on-primary cursor-wait'
-                        : submissionState === 'TIMEOUT_ERROR' || submissionState === 'SUBMISSION_ERROR'
-                        ? 'bg-error text-on-error hover:opacity-90'
-                        : 'bg-primary-gradient text-on-primary hover:opacity-95'
+                        : 'bg-primary-gradient text-on-primary hover:opacity-95 ring-2 ring-primary/20'
                     }`}
                   >
                     {submissionState === 'VALIDATING' && (
                       <>
                         <MaterialIcon name="sync" className="text-[18px] animate-spin" />
-                        <span>Validating Safety Guardrails...</span>
+                        <span>Validating Guardrails...</span>
                       </>
                     )}
                     {submissionState === 'SUBMITTING' && (
@@ -610,25 +716,19 @@ export default function NewAssessmentWorkspacePage() {
                     {submissionState === 'PROCESSING' && (
                       <>
                         <MaterialIcon name="hourglass_top" className="text-[18px] animate-spin" />
-                        <span>Processing &amp; Saving Results...</span>
+                        <span>Generating Clinical Triage...</span>
                       </>
                     )}
                     {submissionState === 'SUCCESS' && (
                       <>
                         <MaterialIcon name="check_circle" className="text-[18px]" />
-                        <span>Assessment Saved! Loading Results...</span>
-                      </>
-                    )}
-                    {(submissionState === 'TIMEOUT_ERROR' || submissionState === 'SUBMISSION_ERROR') && (
-                      <>
-                        <MaterialIcon name="refresh" className="text-[18px]" />
-                        <span>Retry Assessment Submission</span>
+                        <span>Saved! Loading Results...</span>
                       </>
                     )}
                     {submissionState === 'IDLE' && (
                       <>
-                        <span>Submit Assessment &amp; View Results</span>
                         <MaterialIcon name="fact_check" className="text-[18px]" />
+                        <span>Generate Full Clinical Triage &amp; Results</span>
                       </>
                     )}
                   </button>
@@ -637,7 +737,7 @@ export default function NewAssessmentWorkspacePage() {
             </div>
           </div>
 
-          {/* Connected Wearable Vitals & Peripheral Telemetry Strip */}
+          {/* Connected Wearable Vitals Strip */}
           <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -652,7 +752,6 @@ export default function NewAssessmentWorkspacePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Vital 1: Heart Rate */}
               <div className="bg-surface-container-low rounded-xl p-4 flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">
@@ -666,19 +765,8 @@ export default function NewAssessmentWorkspacePage() {
                   </span>
                   <span className="font-label-md text-label-md text-on-surface-variant">BPM</span>
                 </div>
-                <svg className="w-full h-8 overflow-visible" viewBox="0 0 120 28">
-                  <path
-                    d="M0 20 L20 18 L40 21 L60 14 L80 16 L100 12 L120 15"
-                    fill="none"
-                    stroke="#00646f"
-                    strokeLinecap="round"
-                    strokeWidth="2"
-                  />
-                  <circle cx="120" cy="15" fill="#00646f" r="3" />
-                </svg>
               </div>
 
-              {/* Vital 2: SpO2 */}
               <div className="bg-surface-container-low rounded-xl p-4 flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">
@@ -692,115 +780,113 @@ export default function NewAssessmentWorkspacePage() {
                   </span>
                   <span className="font-label-md text-label-md text-on-surface-variant">%</span>
                 </div>
-                <svg className="w-full h-8 overflow-visible" viewBox="0 0 120 28">
-                  <path
-                    d="M0 10 L25 10 L50 12 L75 9 L100 10 L120 10"
-                    fill="none"
-                    stroke="#2060a3"
-                    strokeLinecap="round"
-                    strokeWidth="2"
-                  />
-                  <circle cx="120" cy="10" fill="#2060a3" r="3" />
-                </svg>
               </div>
 
-              {/* Vital 3: Respiratory Rate */}
               <div className="bg-surface-container-low rounded-xl p-4 flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">
                     Respiratory Rate
                   </span>
-                  <span className="font-label-sm text-label-sm text-secondary">Slightly Elev.</span>
+                  <span className="font-label-sm text-label-sm text-secondary">Normal</span>
                 </div>
                 <div className="my-2 flex items-baseline gap-1.5">
                   <span className="font-headline-lg text-headline-lg text-on-surface font-mono">
-                    19
+                    18
                   </span>
                   <span className="font-label-md text-label-md text-on-surface-variant">
                     br/min
                   </span>
                 </div>
-                <svg className="w-full h-8 overflow-visible" viewBox="0 0 120 28">
-                  <path
-                    d="M0 22 L25 20 L50 19 L75 15 L100 13 L120 11"
-                    fill="none"
-                    stroke="#006970"
-                    strokeLinecap="round"
-                    strokeWidth="2"
-                  />
-                  <circle cx="120" cy="11" fill="#006970" r="3" />
-                </svg>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN (4 Cols): Clinical Context, Consent Governance & Live Triage Status */}
+        {/* RIGHT COLUMN (4 Cols): Live Case Context, EHR Consent & Triage Status */}
         <aside className="lg:col-span-4 flex flex-col gap-6">
-          {/* Card 1: Captured Assessment Summary & Preliminary Acuity */}
+          {/* Card 1: Captured Case Context & Live Extracted Entities */}
           <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MaterialIcon name="fact_check" className="text-primary text-[20px]" />
                 <h2 className="font-headline-sm text-headline-sm text-on-surface">
-                  Active Case Context
+                  Live Case Context
                 </h2>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">
-                Evaluating
+              <span
+                className={`px-2.5 py-0.5 rounded-full font-label-sm text-label-sm font-semibold uppercase ${
+                  preliminaryAcuity === 'EMERGENCY'
+                    ? 'bg-error text-on-error'
+                    : preliminaryAcuity === 'URGENT'
+                    ? 'bg-acuity-urgent text-white'
+                    : 'bg-secondary-fixed text-on-secondary-fixed'
+                }`}
+              >
+                {preliminaryAcuity}
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-surface-container-low space-y-2.5">
               <div className="flex items-center justify-between font-body-sm text-body-sm">
-                <span className="text-on-surface-variant">Chief Symptom</span>
-                <span className="font-semibold text-on-surface">Dry Cough &amp; Chest Tightness</span>
+                <span className="text-on-surface-variant">Primary Symptom</span>
+                <span className="font-semibold text-on-surface text-right max-w-[180px] truncate">
+                  {extractedEntities.symptoms[0] || 'Under evaluation'}
+                </span>
               </div>
               <div className="flex items-center justify-between font-body-sm text-body-sm">
-                <span className="text-on-surface-variant">Duration</span>
-                <span className="font-semibold text-on-surface">72 Hours (3 Days)</span>
+                <span className="text-on-surface-variant">Timeline</span>
+                <span className="font-semibold text-on-surface">
+                  {extractedEntities.duration}
+                </span>
               </div>
               <div className="flex items-center justify-between font-body-sm text-body-sm">
-                <span className="text-on-surface-variant">Recorded Temp</span>
-                <span className="font-semibold text-on-surface">99.4°F (Low-Grade)</span>
+                <span className="text-on-surface-variant">Estimated Severity</span>
+                <span className="font-semibold text-secondary">
+                  {extractedEntities.severity}
+                </span>
               </div>
-              <div className="pt-2 border-t border-outline-variant/25 space-y-1.5">
-                <div className="flex items-center justify-between font-label-sm text-label-sm">
-                  <span className="text-on-surface-variant uppercase">Self-Reported Severity</span>
-                  <span className="text-secondary font-semibold">4 / 10 (Moderate)</span>
+
+              {extractedEntities.pertinentNegatives.length > 0 && (
+                <div className="pt-2 border-t border-outline-variant/25">
+                  <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline block mb-1">
+                    Pertinent Negatives
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {extractedEntities.pertinentNegatives.map((neg, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant text-xs"
+                      >
+                        ✓ {neg}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
-                  <div className="w-2/5 h-full bg-secondary rounded-full" />
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Preliminary Algorithmic Signal */}
             <div className="p-3.5 rounded-xl bg-surface-container space-y-1.5">
               <div className="flex items-center gap-1.5 text-primary font-label-md text-label-md">
                 <MaterialIcon name="analytics" className="text-[16px]" />
-                <span>Active Rule Execution</span>
+                <span>Active Safety Screening</span>
               </div>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
                 {redFlagCheck.triggered ? (
-                  <>
-                    Rule-Set:{' '}
-                    <strong className="text-error">
-                      {redFlagCheck.matchedRules[0]?.clinicalLabel} (Emergency Override)
-                    </strong>
-                  </>
+                  <strong className="text-error">
+                    {redFlagCheck.matchedRules[0]?.clinicalLabel} (Emergency Override)
+                  </strong>
                 ) : (
                   <>
-                    Rule-Set:{' '}
-                    <strong className="text-on-surface">Tier 2 Non-Emergent Respiratory</strong>.
-                    Screening for pleuritic friction vs. reactive airway bronchospasm.
+                    Active Protocol: <strong className="text-on-surface">Tier 2 Outpatient Triage</strong>.
+                    Screening continuously for critical red-flag symptoms.
                   </>
                 )}
               </p>
             </div>
           </div>
 
-          {/* Card 2: Consented Medical History Context & Explicit Toggle */}
+          {/* Card 2: Consented Medical History Context */}
           <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -810,11 +896,10 @@ export default function NewAssessmentWorkspacePage() {
                 </h2>
               </div>
               <span className="px-2 py-0.5 rounded bg-surface-container-low text-outline font-label-sm text-label-sm font-mono">
-                EHR Link #8841
+                EHR Link Active
               </span>
             </div>
 
-            {/* Explicit Patient Consent Control Toggle */}
             <div className="p-3.5 rounded-xl bg-surface-container-low flex items-start justify-between gap-3">
               <div className="space-y-0.5">
                 <label
@@ -840,7 +925,6 @@ export default function NewAssessmentWorkspacePage() {
               </label>
             </div>
 
-            {/* Consented Clinical Data Items */}
             <div
               id="synced-data-panel"
               className={`space-y-3 transition-opacity duration-200 ${
@@ -869,27 +953,9 @@ export default function NewAssessmentWorkspacePage() {
                   <div className="p-2.5 rounded-lg bg-surface-container-low flex items-center justify-between font-body-sm text-body-sm">
                     <span className="font-medium text-on-surface">Albuterol Sulfate HFA</span>
                     <span className="text-on-surface-variant font-label-sm text-label-sm">
-                      90mcg PRN Inhaler
+                      90mcg PRN
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-surface-container-low flex items-center justify-between font-body-sm text-body-sm">
-                    <span className="font-medium text-on-surface">Cetirizine HCl</span>
-                    <span className="text-on-surface-variant font-label-sm text-label-sm">
-                      10mg Daily Oral
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline">
-                  Documented Allergies
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-md bg-error-container/60 text-on-error-container font-label-md text-label-md flex items-center gap-1">
-                    <MaterialIcon name="warning" className="text-[14px]" />
-                    <span>Penicillin (Hives / Rash)</span>
-                  </span>
                 </div>
               </div>
             </div>
@@ -905,82 +971,7 @@ export default function NewAssessmentWorkspacePage() {
             </div>
           </div>
 
-          {/* Card 3: Clinician Verification & Next-Step Routing Preview */}
-          <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2">
-              <MaterialIcon name="stethoscope" className="text-primary text-[20px]" />
-              <h2 className="font-headline-sm text-headline-sm text-on-surface">Triage Pipeline</h2>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 mt-0.5 font-label-sm text-label-sm">
-                  ✓
-                </div>
-                <div>
-                  <p className="font-label-md text-label-md text-on-surface">
-                    1. Automated Red-Flag Exclusion
-                  </p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Hemoptysis and acute hypoxia screened.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 mt-0.5 font-label-sm text-label-sm">
-                  2
-                </div>
-                <div>
-                  <p className="font-label-md text-label-md text-primary">
-                    2. Differential Risk Stratification
-                  </p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Evaluating pleuritic pain &amp; asthma history.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 opacity-60">
-                <div className="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0 mt-0.5 font-label-sm text-label-sm">
-                  3
-                </div>
-                <div>
-                  <p className="font-label-md text-label-md text-on-surface">
-                    3. Clinician Review &amp; Care Handoff
-                  </p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Summary routed to on-call pulmonology RN/MD.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* On-Call Clinician Preview */}
-            <div className="p-3 rounded-xl bg-surface-container-low flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-headline-sm text-headline-sm">
-                  JV
-                </div>
-                <div>
-                  <span className="font-label-md text-label-md text-on-surface block">
-                    Queue Ready: Dr. Julian Vance
-                  </span>
-                  <span className="font-body-sm text-body-sm text-on-surface-variant">
-                    Avg. Verification: ~12 mins
-                  </span>
-                </div>
-              </div>
-              <Link
-                href="/assessments/CN-2026-8841/results"
-                className="font-label-sm text-label-sm text-primary hover:underline"
-              >
-                Preview Output →
-              </Link>
-            </div>
-          </div>
-
-          {/* Persistent Clinical Decision-Support Governance Notice */}
+          {/* Card 3: Clinical Governance Notice */}
           <div className="p-4 rounded-xl bg-surface-container-low space-y-1.5">
             <div className="flex items-center gap-1.5 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
               <MaterialIcon name="policy" className="text-[16px] text-primary" />
@@ -989,7 +980,7 @@ export default function NewAssessmentWorkspacePage() {
             <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
               CareNavigator is a <strong>clinical decision-support tool</strong>, not a replacement
               for a licensed physician. Outputs represent preliminary risk stratification grounded
-              in NICE/GINA respiratory guidelines and require clinical confirmation.
+              in NICE/GINA clinical guidelines and require clinician review.
             </p>
           </div>
         </aside>
