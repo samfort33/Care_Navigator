@@ -47,6 +47,23 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 }
 
+model ClinicianAccessRequest {
+  id            String    @id @default(cuid())
+  fullName      String
+  email         String
+  passwordHash  String?
+  licenseNumber String
+  specialty     String
+  organization  String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt     DateTime  @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?
+
+  @@index([email, status])
+  @@index([status, createdAt])
+}
+
 model PatientProfile {
   id                    String   @id @default(cuid())
   userId                String   @unique

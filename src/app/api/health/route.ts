@@ -52,7 +52,7 @@ export async function GET() {
       aiService: {
         provider: provider.providerName,
         model: provider.modelName,
-        configured: ollamaConfigured || geminiConfigured,
+        configured: ollamaConfigured || geminiConfigured || isMock,
         mode: isLocalOllama
           ? ollamaConfigured
             ? 'LOCAL_OLLAMA_CONFIGURED'

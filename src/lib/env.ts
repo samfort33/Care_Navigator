@@ -97,7 +97,12 @@ export function validateServerEnv(rawEnv: Record<string, string | undefined> = p
     throw new Error(`Invalid CareNavigator environment configuration: ${formattedErrors}`);
   }
 
-  if (parsed.data.NODE_ENV === 'production') {
+  const isStrictProduction =
+    process.env.VERCEL === '1' ||
+    process.env.VERCEL_ENV === 'production' ||
+    (parsed.data.NODE_ENV === 'production' && Boolean(rawEnv.DATABASE_URL && /^postgres(?:ql)?:\/\//i.test(rawEnv.DATABASE_URL)));
+
+  if (isStrictProduction) {
     if (!rawEnv.AUTH_SECRET || rawEnv.AUTH_SECRET.length < 32 || rawEnv.AUTH_SECRET.startsWith('dev-only-')) {
       throw new Error('Production requires a unique AUTH_SECRET of at least 32 characters.');
     }
